@@ -1,0 +1,27 @@
+# Mars Rover Astrobiology GUI - Python Dependencies
+# Install: pip3 install -r requirements.txt
+
+# GUI Framework
+PySide6>=6.6.0
+PySide6-WebEngine>=6.6.0
+
+# Plotting
+pyqtgraph>=0.13.0
+
+# Numerical computing
+numpy>=1.24.0
+
+# Camera streaming (OpenCV)
+opencv-python>=4.8.0
+
+# ROS 2 (must be installed separately via apt)
+# These are for reference - install ROS 2 Humble first:
+# sudo apt install ros-humble-desktop
+# sudo apt install python3-colcon-common-extensions
+
+# Optional: Data logging
+# pandas>=2.0.0
+# matplotlib>=3.7.0
+
+# Optional: InfluxDB for time-series data
+# influxdb-client>=1.36.0
