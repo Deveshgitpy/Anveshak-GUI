@@ -13,10 +13,8 @@ from collections import deque
 import time
 
 
-# ===================== SCIENTIFIC PLOT =====================
 
 class ScientificPlot(pg.PlotWidget):
-
 
     def __init__(self, title, ylabel, unit="", window_seconds=120, color="#64b5f6"):
         super().__init__()
@@ -59,8 +57,6 @@ class ScientificPlot(pg.PlotWidget):
         self.curve.setData(self.time_data, self.value_data)
 
 
-#VALUE PANEL
-
 class SensorDisplayPanel(QFrame):
     """
     Compact numeric display panel
@@ -102,8 +98,6 @@ class SensorDisplayPanel(QFrame):
         self.value_label.setText(f"{value:.2f}")
 
 
-# ANALYSIS TAB
-
 class AnalysisTab(QWidget):
     """
     Tab 1: Atmospheric & Soil Analysis
@@ -121,7 +115,6 @@ class AnalysisTab(QWidget):
 
         self._connect_signals()
 
-    # ATMOSPHERIC 
 
     def _create_atmospheric_section(self):
         group = QGroupBox("ATMOSPHERIC ANALYSIS")
@@ -154,7 +147,6 @@ class AnalysisTab(QWidget):
 
         return group
 
-    # SOIL 
 
     def _create_soil_section(self):
         soil_layout = QHBoxLayout()
@@ -176,7 +168,7 @@ class AnalysisTab(QWidget):
         s1.addWidget(self.soil1_temp_panel, 1, 0)
         s1.addWidget(self.soil1_moist_panel, 1, 1)
 
-        # ===== SOIL 2 =====
+        #  SOIL 2 
         soil2 = QGroupBox("SOIL SAMPLE 2")
         s2 = QGridLayout(soil2)
         s2.setColumnStretch(0, 1)
@@ -197,7 +189,7 @@ class AnalysisTab(QWidget):
 
         return soil_layout
 
-    #ROS CONNECTION 
+    # ROS CONNECTION 
 
     def _connect_signals(self):
         self.ros.atmospheric_temp_signal.connect(
