@@ -88,7 +88,7 @@ class CameraStreamWidget(QWidget):
     def start_stream(self):
         port = self.url_input.text().strip()
         if not port.isdigit():
-            self.status_label.setText("❌ Invalid port")
+            self.status_label.setText(" Invalid port")
             return
 
         cmd = [
