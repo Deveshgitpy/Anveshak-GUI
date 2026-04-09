@@ -15,13 +15,12 @@ from ros_interface import ROSInterface
 
 
 def main():
-
     rclpy.init()
     
     app = QApplication(sys.argv)
     app.setStyle('Fusion')  
-    apply_dark_theme(app)
     
+    apply_dark_theme(app)
     
     ros_interface = ROSInterface()
     
@@ -33,12 +32,14 @@ def main():
     
     exit_code = app.exec()
     
+    # Cleanup
     ros_interface.destroy_node()
     rclpy.shutdown()
     sys.exit(exit_code)
 
 
 def apply_dark_theme(app):
+    """Apply scientific dark theme to the application"""
     app.setStyleSheet("""
         QMainWindow {
             background-color: #1e1e1e;
@@ -114,3 +115,4 @@ def apply_dark_theme(app):
 
 if __name__ == '__main__':
     main()
+
