@@ -15,32 +15,44 @@ import numpy as np
 
 
 class ROSInterface(Node, QObject):
-        
+
+    # ========== SIGNALS (Thread-safe Qt communication) ==========
+    
     # ESP32 #1 - Atmospheric signals
-    atmospheric_temp_signal = Signal(float)      
-    atmospheric_humidity_signal = Signal(float)  
-    atmospheric_pressure_signal = Signal(float)  
-    gas_concentration_signal = Signal(float)     
+    atmospheric_temp_signal = Signal(float)      # DHT11 temperature
+    atmospheric_humidity_signal = Signal(float)  # DHT11 humidity 
+    atmospheric_pressure_signal = Signal(float)  # BMP 
+    gas_concentration_signal = Signal(float)     # MQ-4 gas sensor
+    
+    # ESP32 #1 - Soil Sample 1 signals (DS18B20 + Moisture)
     soil1_temp_signal = Signal(float)
     soil1_moisture_signal = Signal(float)
+    
+    # ESP32 #1 - Soil Sample 2 signals (DS18B20 + Moisture)
     soil2_temp_signal = Signal(float)
     soil2_moisture_signal = Signal(float)
     
     # ESP32 #2 - Stepper feedback
     stepper_echo_signal = Signal(float)
+    
+    # ESP32 #2 - Pump feedback
     pump_echo_signal = Signal(list)
     
     # Camera signals (from Ubuntu/Orin/Xavier)
     camera1_signal = Signal(np.ndarray)
     camera2_signal = Signal(np.ndarray)
     camera3_signal = Signal(np.ndarray)
+
+    # Servo signals
+    servo1_signal = Signal(int)
+    servo2_signal = Signal(int)
+    servo3_signal = Signal(int)
     
     
     def __init__(self):
         Node.__init__(self, 'astrobiology_gui_node')
         QObject.__init__(self)
         
-        # QoS profiles
         self.sensor_qos = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT,
             history=HistoryPolicy.KEEP_LAST,
@@ -54,9 +66,10 @@ class ROSInterface(Node, QObject):
         )
         
         self._setup_subscribers()
+        
         self._setup_publishers()
         
-        self.get_logger().info(' GUI Node initialized')
+        self.get_logger().info(' Astrobiology GUI Node initialized')
         self.get_logger().info(' Waiting for ESP32 #1 (sensors + servos)...')
         self.get_logger().info(' Waiting for ESP32 #2 (pumps + stepper)...')
     
@@ -82,7 +95,7 @@ class ROSInterface(Node, QObject):
             self.sensor_qos
         )
         
-        # Soil Sample 1 (DS18B20 )
+        # Soil Sample 1 
         self.create_subscription(
             Float32,
             '/soil/sample1/temperature',
@@ -97,7 +110,7 @@ class ROSInterface(Node, QObject):
             self.sensor_qos
         )
         
-        # Soil Sample 2 (DS18B20 )
+        # Soil Sample 2 
         self.create_subscription(
             Float32,
             '/soil/sample2/temperature',
@@ -114,7 +127,7 @@ class ROSInterface(Node, QObject):
         
         # ========== ESP32 #2 FEEDBACK TOPICS ==========
         
-        # Stepper echo (confirmation)
+        # Stepper echo 
         self.create_subscription(
             Float32,
             '/stepper/angle_echo',
@@ -122,7 +135,7 @@ class ROSInterface(Node, QObject):
             self.reliable_qos
         )
         
-        # Pump echo (confirmation)
+        # Pump echo 
         self.create_subscription(
             Int32MultiArray,
             '/pump/cmd_echo',
@@ -131,8 +144,8 @@ class ROSInterface(Node, QObject):
         )
         
         # ========== CAMERA TOPICS (from Orin/Xavier/Ubuntu) ==========
-        # Leaving for now to add camera later (not sure which cameras and how they will be used on rover)
-        
+        # Placeholder for future image streams
+        # Uncomment when camera nodes are running:
         
         # self.create_subscription(
         #     Image,
@@ -157,7 +170,7 @@ class ROSInterface(Node, QObject):
     
     
     def _setup_publishers(self):
-        
+        """Initialize all ROS 2 publishers"""
         
         # ========== ESP32 #2 COMMAND TOPICS ==========
         
@@ -184,7 +197,7 @@ class ROSInterface(Node, QObject):
             self.reliable_qos
         )
         
-        # Servo 3 (will be adding later :D)
+        # Servo 3 (add to ESP32 #1 firmware)
         self.servo3_pub = self.create_publisher(
             Int32,
             '/servo3/angle',
@@ -255,7 +268,7 @@ class ROSInterface(Node, QObject):
         """Stepper command echo (ESP32 #2 confirmation)"""
         try:
             self.stepper_echo_signal.emit(msg.data)
-            self.get_logger().info(f'✅ Stepper confirmed: {msg.data}°')
+            self.get_logger().info(f' Stepper confirmed: {msg.data}°')
         except Exception as e:
             self.get_logger().error(f'Stepper echo error: {e}')
     
@@ -265,7 +278,7 @@ class ROSInterface(Node, QObject):
         try:
             pump_states = list(msg.data)
             self.pump_echo_signal.emit(pump_states)
-            self.get_logger().info(f'✅ Pumps confirmed: {pump_states}')
+            self.get_logger().info(f' Pumps confirmed: {pump_states}')
         except Exception as e:
             self.get_logger().error(f'Pump echo error: {e}')
     
@@ -273,7 +286,6 @@ class ROSInterface(Node, QObject):
     def _camera1_callback(self, msg: Image):
         """Camera 1 image callback (from Orin/Xavier/Ubuntu)"""
         try:
-            # Convert ROS Image to numpy array
             img = np.frombuffer(msg.data, dtype=np.uint8)
             img = img.reshape((msg.height, msg.width, 3))
             self.camera1_signal.emit(img)
@@ -313,12 +325,12 @@ class ROSInterface(Node, QObject):
             msg = Float32()
             msg.data = float(angle)
             self.stepper_pub.publish(msg)
-            self.get_logger().info(f'📤 Stepper command: {angle}°')
+            self.get_logger().info(f' Stepper command: {angle}°')
         except Exception as e:
             self.get_logger().error(f'Failed to publish stepper angle: {e}')
     
     
-    def publish_servo_angle(self, servo_id: int, angle: int):
+    def publish_servo_angle(self, servo_id: int, angle):
         """
         Publish servo angle command (ESP32 #1)
         Args:
@@ -343,7 +355,7 @@ class ROSInterface(Node, QObject):
                 self.get_logger().error(f'Invalid servo ID: {servo_id}')
                 return
             
-            self.get_logger().info(f'📤 Servo {servo_id} command: {angle}°')
+            self.get_logger().info(f' Servo {servo_id} command: {angle}°')
         except Exception as e:
             self.get_logger().error(f'Failed to publish servo angle: {e}')
     
@@ -363,6 +375,7 @@ class ROSInterface(Node, QObject):
             msg = Int32MultiArray()
             msg.data = [int(s) for s in pump_states]
             self.pump_pub.publish(msg)
-            self.get_logger().info(f'📤 Pump commands: {pump_states}')
+            self.get_logger().info(f' Pump commands: {pump_states}')
         except Exception as e:
             self.get_logger().error(f'Failed to publish pump commands: {e}')
+
