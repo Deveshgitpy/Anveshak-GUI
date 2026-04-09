@@ -16,16 +16,24 @@ from gui.tab_actuation import ActuationTab
 
 
 class MainWindow(QMainWindow):
+    """
+    Main application window with tabbed interface
+    Tab 1: Atmospheric & Soil Analysis (Sensors)
+    Tab 2: Motion, Actuation & Vision (Actuators + Cameras)
+    """
     
     def __init__(self, ros_interface):
         super().__init__()
-        self.ros_interface = ros_interface      
-        self.setWindowTitle(' Anveshak IRC Dashboard')
-        self.setMinimumSize(1600, 950)       
+        self.ros_interface = ros_interface
+        
+        self.setWindowTitle(' Mars Rover Astrobiology Module - IRC Competition')
+        self.setMinimumSize(1600, 950)
+        
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
         main_layout.setContentsMargins(0, 0, 0, 0)
+        
         self.tabs = QTabWidget()
         self.tabs.setStyleSheet("""
             QTabWidget::pane {
@@ -55,7 +63,6 @@ class MainWindow(QMainWindow):
         """)
         main_layout.addWidget(self.tabs)
         
-        
         self.analysis_tab = AnalysisTab(ros_interface)
         self.actuation_tab = ActuationTab(ros_interface)
         
@@ -70,12 +77,15 @@ class MainWindow(QMainWindow):
                 border-top: 2px solid #0d47a1;
             }
         """)
-        self.statusBar().showMessage('ROS 2 Node Active ')
+        self.statusBar().showMessage(' ROS 2 Node Active - Waiting for ESP32 data...')
+        
         
         self._setup_status_monitoring()
     
     
     def _setup_status_monitoring(self):
+        """Setup status bar updates based on ROS data"""
+        
         self.ros_interface.atmospheric_temp_signal.connect(
             lambda _: self._update_status_first_data("ESP32 #1 Connected")
         )
@@ -89,6 +99,7 @@ class MainWindow(QMainWindow):
     
     
     def _update_status_first_data(self, device):
+        """Update status when device first connects"""
         if "ESP32 #1" in device and not self._esp32_1_connected:
             self._esp32_1_connected = True
             self.statusBar().showMessage(' ESP32 #1 Active (Sensors) | Waiting for ESP32 #2...')
@@ -98,4 +109,6 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(' ESP32 #2 Active (Actuators) | Waiting for ESP32 #1...')
         
         if self._esp32_1_connected and self._esp32_2_connected:
-            self.statusBar().showMessage('All Systems Operational - ESP32 #1 & #2 Online')
+            self.statusBar().showMessage(' All Systems Operational - ESP32 #1 & #2 Online')
+
+
