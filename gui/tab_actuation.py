@@ -1,5 +1,5 @@
 """
-TAB 2: Motion, Actuation & Vision
+TAB 2: Actuators and camera feed
 RAW H.264 over UDP (ffplay-style) integrated
 LOWEST LATENCY CONFIGURATION
 """
@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QPushButton, QDoubleSpinBox, QSpinBox, QGridLayout,
     QLineEdit, QSizePolicy
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPixmap, QImage
 
 import subprocess
@@ -20,6 +20,7 @@ import numpy as np
 # ===================== CAMERA WIDGET (UDP H264) =====================
 
 class CameraStreamWidget(QWidget):
+    
     def __init__(self, camera_name, default_port="5000"):
         super().__init__()
 
@@ -122,7 +123,7 @@ class CameraStreamWidget(QWidget):
             self.thread.start()
 
         except Exception:
-            self.status_label.setText("❌ FFmpeg failed")
+            self.status_label.setText(" FFmpeg failed")
 
     def stop_stream(self):
         self.is_streaming = False
@@ -168,6 +169,7 @@ class CameraStreamWidget(QWidget):
 # ===================== ACTUATION TAB =====================
 
 class ActuationTab(QWidget):
+    
     def __init__(self, ros_interface):
         super().__init__()
         self.ros_interface = ros_interface
@@ -212,16 +214,18 @@ class ActuationTab(QWidget):
         layout = QVBoxLayout(group)
         layout.setSpacing(6)
 
-        angle = QDoubleSpinBox()
-        angle.setRange(-360, 360)
-        angle.setSuffix(" °")
-        angle.setFixedWidth(110)
+        self.stepper_angle_input = QDoubleSpinBox()
+        self.stepper_angle_input.setRange(-360, 360)
+        self.stepper_angle_input.setSuffix(" °")
+        self.stepper_angle_input.setFixedWidth(110)
 
-        rotate = QPushButton("ROTATE")
+        rotate = QPushButton("🔄 ROTATE")
         rotate.setMinimumHeight(28)
+        rotate.setStyleSheet("background-color: #0d47a1; font-weight: bold;")
+        rotate.clicked.connect(self._on_stepper_rotate)
 
         layout.addWidget(QLabel("Target Angle"))
-        layout.addWidget(angle)
+        layout.addWidget(self.stepper_angle_input)
         layout.addWidget(rotate)
         layout.addStretch()
         return group
@@ -230,16 +234,23 @@ class ActuationTab(QWidget):
         group = QGroupBox("SERVO MOTORS (ESP32 #1)")
         layout = QGridLayout(group)
 
+        self.servo_inputs = []  
+
         for i in range(3):
             layout.addWidget(QLabel(f"Servo {i+1}"), i, 0)
 
             spin = QSpinBox()
             spin.setRange(0, 180)
             spin.setSuffix(" °")
+            spin.setValue(90)
             spin.setFixedWidth(90)
+            self.servo_inputs.append(spin)
 
             btn = QPushButton("SEND")
             btn.setFixedWidth(70)
+            btn.setStyleSheet("background-color: #0d47a1;")
+            servo_id = i + 1
+            btn.clicked.connect(lambda checked=False, sid=servo_id: self._on_servo_send(sid))
 
             layout.addWidget(spin, i, 1)
             layout.addWidget(btn, i, 2)
@@ -254,18 +265,83 @@ class ActuationTab(QWidget):
         for c, h in enumerate(headers):
             lbl = QLabel(h)
             lbl.setAlignment(Qt.AlignCenter)
+            lbl.setStyleSheet("font-weight: bold; color: #64b5f6;")
             layout.addWidget(lbl, 0, c)
 
         for i in range(4):
-            layout.addWidget(QLabel(str(i+1)), i+1, 0)
-            for c in range(1, 4):
-                btn = QPushButton(headers[c])
-                btn.setMinimumHeight(24)
-                layout.addWidget(btn, i+1, c)
+            layout.addWidget(QLabel(f"P{i+1}"), i+1, 0)
+            
+            # FWD button
+            fwd_btn = QPushButton("▶")
+            fwd_btn.setMinimumHeight(24)
+            fwd_btn.setStyleSheet("background-color: #2e7d32;")
+            fwd_btn.clicked.connect(lambda checked=False, pump_id=i: self._on_pump_forward(pump_id))
+            layout.addWidget(fwd_btn, i+1, 1)
+            
+            # REV button
+            rev_btn = QPushButton("◀")
+            rev_btn.setMinimumHeight(24)
+            rev_btn.setStyleSheet("background-color: #c62828;")
+            rev_btn.clicked.connect(lambda checked=False, pump_id=i: self._on_pump_reverse(pump_id))
+            layout.addWidget(rev_btn, i+1, 2)
+            
+            # STOP button
+            stop_btn = QPushButton("■")
+            stop_btn.setMinimumHeight(24)
+            stop_btn.setStyleSheet("background-color: #616161;")
+            stop_btn.clicked.connect(lambda checked=False, pump_id=i: self._on_pump_stop(pump_id))
+            layout.addWidget(stop_btn, i+1, 3)
 
-        stop_all = QPushButton("EMERGENCY STOP")
+        # Emergency stop
+        stop_all = QPushButton("⏹ EMERGENCY STOP ALL")
         stop_all.setMinimumHeight(34)
         stop_all.setStyleSheet("background:#d32f2f; font-weight:bold;")
+        stop_all.clicked.connect(self._on_pump_all_stop)
         layout.addWidget(stop_all, 5, 0, 1, 4)
 
         return group
+    
+    # ===================== CALLBACKS (FIXED) =====================
+
+    def _on_stepper_rotate(self):
+        """Stepper rotate callback"""
+        angle = self.stepper_angle_input.value()
+        print(f"[GUI] Sending stepper angle: {angle}°")
+        self.ros_interface.publish_stepper_angle(angle)
+
+    def _on_servo_send(self, servo_id):
+        """Servo send callback"""
+        # servo_id is already 1, 2, or 3 (correct!)
+        angle = self.servo_inputs[servo_id - 1].value()
+        print(f"[GUI] Sending servo {servo_id} angle: {angle}°")
+        self.ros_interface.publish_servo_angle(servo_id, angle)
+
+    def _on_pump_forward(self, pump_id):
+        """Pump forward callback"""
+        self.pump_states[pump_id] = 1
+        print(f"[GUI] Pump {pump_id+1} FORWARD")
+        self._publish_pump_states()
+
+    def _on_pump_reverse(self, pump_id):
+        """Pump reverse callback"""
+        self.pump_states[pump_id] = -1
+        print(f"[GUI] Pump {pump_id+1} REVERSE")
+        self._publish_pump_states()
+
+    def _on_pump_stop(self, pump_id):
+        """Pump stop callback"""
+        self.pump_states[pump_id] = 0
+        print(f"[GUI] Pump {pump_id+1} STOP")
+        self._publish_pump_states()
+
+    def _on_pump_all_stop(self):
+        """Emergency stop all pumps"""
+        self.pump_states = [0, 0, 0, 0]
+        print("[GUI] EMERGENCY STOP ALL PUMPS")
+        self._publish_pump_states()
+
+    def _publish_pump_states(self):
+        """Publish pump states to ROS"""
+        print(f"[GUI] Publishing pump states: {self.pump_states}")
+        self.ros_interface.publish_pump_commands(self.pump_states)
+
